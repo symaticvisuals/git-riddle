@@ -8,7 +8,7 @@ export default function MainNavbar() {
     <Navbar>
       <NavbarBrand>
       
-        <p className="font-bold text-inherit">React-Langchain</p>
+        <p className="font-bold text-inherit">Git Riddles</p>
       </NavbarBrand>
       <NavbarContent className="hidden sm:flex gap-4" justify="center">
        

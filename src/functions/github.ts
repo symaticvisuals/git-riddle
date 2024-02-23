@@ -30,7 +30,28 @@ async function fetchUserDetails(octokit: Octokit, username: string) {
   const { data: userDetails } = await octokit.users.getByUsername({
     username,
   });
-  return userDetails;
+
+  const repositoriesCount = userDetails.public_repos;
+
+  // Clue 2: Location and Company
+  const company = userDetails.company;
+
+  // Clue 3: Bio and Skills
+  const bio = userDetails.bio;
+
+  // Clue 4: Twitter Username
+  const twitterUsername = userDetails.twitter_username;
+
+  // Clue 5: Disk Usage
+  const diskUsage = userDetails.disk_usage;
+
+  return {
+    repositoriesCount,
+    company,
+    bio,
+    twitterUsername,
+    diskUsage,
+  };
 }
 
 async function fetchRepositories(octokit: Octokit, username: string) {
@@ -67,11 +88,26 @@ async function calculateMostUsedLanguage(repositories: any) {
   );
 }
 
-async function fetchStarredRepositories(octokit: Octokit, username: string) {
+async function fetchStarredRepositoriesWithMaxStarsOrForks(
+  octokit: Octokit,
+  username: string,
+  metric: "stars" | "forks"
+) {
   const { data: starredRepos } = await octokit.activity.listReposStarredByUser({
     username,
   });
-  return starredRepos;
+
+  // Find the maximum value for the metric
+  const maxMetricValue = Math.max(
+    ...starredRepos.map((repo: any) => repo[metric])
+  );
+
+  // Filter repositories with the maximum value for the metric
+  const maxRepos = starredRepos
+    .filter((repo: any) => repo[metric] === maxMetricValue)
+    .map((repo: any) => ({ name: repo.name, [metric]: repo[metric] }));
+
+  return JSON.stringify(maxRepos);
 }
 
 async function calculateTotalStarsReceived(repositories: any) {
@@ -147,15 +183,77 @@ async function calculateContributionStreak(commits: any[]) {
   return longestStreak;
 }
 
+// create a function to fetch the latest created repository
+async function fetchLatestCreatedRepository(octokit: Octokit, username: string) {
+  const { data: repositories } = await octokit.repos.listForUser({
+    username,
+    sort: "created",
+    direction: "desc",
+  });
+
+  
+  // return the name of the latest created repository
+  return repositories[0].name;
+}
+
+// create a function that fetches the year the user joined GitHub
+async function fetchUserJoinDate(octokit: Octokit, username: string) {
+  const { data: user } = await octokit.users.getByUsername({
+    username,
+  });
+
+  return user.created_at;
+}
+
+async function fetchUserSummary(octokit: Octokit, username: string) {
+  const userDetails = await fetchUserDetails(octokit, username);
+  const repositories = await fetchRepositories(octokit, username);
+  const mostUsedLanguage = await calculateMostUsedLanguage(repositories);
+  const maxStarredRepo = await fetchStarredRepositoriesWithMaxStarsOrForks(
+    octokit,
+    username,
+    "stars"
+  );
+  const maxForksRepo = await fetchStarredRepositoriesWithMaxStarsOrForks(
+    octokit,
+    username,
+    "forks"
+  );
+  const totalStarsReceived = await calculateTotalStarsReceived(repositories);
+  const mostActiveRepo = await findMostActiveRepository(
+    repositories,
+    octokit,
+    username
+  );
+  const issuesCreatedByUser = await fetchIssuesCreatedByUser(octokit, username);
+  const contributionStreak = await calculateContributionStreak(
+    await fetchCommitsForRepo(octokit, username, mostActiveRepo)
+  );
+
+  return {
+    ...userDetails,
+    mostUsedLanguage,
+    maxStarredRepo,
+    totalStarsReceived,
+
+    maxForksRepo,
+    issuesCreatedByUser,
+    contributionStreak,
+  };
+}
+
 export {
   fetchGitHubDetails,
   fetchUserDetails,
   fetchRepositories,
   fetchCommitsForRepo,
   calculateMostUsedLanguage,
-  fetchStarredRepositories,
+  fetchStarredRepositoriesWithMaxStarsOrForks,
   calculateTotalStarsReceived,
   findMostActiveRepository,
   fetchIssuesCreatedByUser,
   calculateContributionStreak,
+  fetchUserSummary,
+  fetchLatestCreatedRepository,
+  fetchUserJoinDate,
 };
